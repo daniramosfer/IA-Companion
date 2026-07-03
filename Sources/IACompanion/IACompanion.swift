@@ -134,16 +134,12 @@ class IconView: NSView {
 // MARK: - IA Context
 
 class IAContext {
-    let id: String
+    var id: String
     var name: String
     var status: IAStatus = .idle
-    var statusItem: NSStatusItem?
-    var menu: NSMenu?
     var iconView: IconView?
-    
-    // For holding the request
-    var currentSemaphore: DispatchSemaphore?
     var selectedOption: String?
+    var currentSemaphore: DispatchSemaphore?
     
     init(id: String, name: String) {
         self.id = id
@@ -195,10 +191,19 @@ struct InteractiveAskView: View {
 class AppDelegate: NSObject, NSApplicationDelegate {
     let server = HttpServer()
     var contexts: [String: IAContext] = [:]
+    var activeIDs: [String] = []
+    var mainStatusItem: NSStatusItem!
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Will be ignored if LSUIElement is true in Info.plist, but good fallback
         NSApp.setActivationPolicy(.accessory)
+        
+        mainStatusItem = NSStatusBar.system.statusItem(withLength: 26)
+        if let button = mainStatusItem.button {
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+        
         setupServer()
         
         // Create a default icon so the user knows the app is running
@@ -259,11 +264,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func removeIA(id: String) {
         DispatchQueue.main.async {
-            if let context = self.contexts[id] {
-                if let item = context.statusItem {
-                    NSStatusBar.system.removeStatusItem(item)
-                }
+            if self.contexts[id] != nil {
                 self.contexts.removeValue(forKey: id)
+                self.activeIDs.removeAll { $0 == id }
+                self.rebuildIcons()
             }
         }
     }
@@ -296,7 +300,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menuItem.view = hostView
             menu.addItem(menuItem)
             
-            context.statusItem?.menu = menu
+            self.mainStatusItem.menu = menu
         }
         
         // Block until user clicks an option
@@ -307,7 +311,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let context = self.contexts[payload.id]
             responseText = context?.selectedOption ?? ""
             // Clear menu after selection
-            context?.statusItem?.menu = nil
+            self.mainStatusItem.menu = nil
             context?.status = .working
             if let ctx = context {
                 self.refreshStatusItem(for: ctx)
@@ -332,27 +336,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let existing = contexts[id] {
             return existing
         }
+        
         let newContext = IAContext(id: id, name: name)
-        
-        let statusItem = NSStatusBar.system.statusItem(withLength: 26) // Fixed width for clean look
-        statusItem.menu = nil
-        newContext.statusItem = statusItem
-        
-        // Create Full Icon View
-        if let button = statusItem.button {
-            button.identifier = NSUserInterfaceItemIdentifier(id)
-            button.target = self
-            button.action = #selector(statusItemClicked(_:))
-            
-            let iconView = IconView(frame: button.bounds)
-            iconView.autoresizingMask = [.width, .height]
-            button.addSubview(iconView)
-            newContext.iconView = iconView
-        }
-        
         contexts[id] = newContext
-        refreshStatusItem(for: newContext)
+        activeIDs.append(id)
+        
+        rebuildIcons()
+        
         return newContext
+    }
+    
+    func rebuildIcons() {
+        guard let button = mainStatusItem.button else { return }
+        
+        button.subviews.forEach { $0.removeFromSuperview() }
+        
+        let newLength = CGFloat(max(1, activeIDs.count) * 26)
+        mainStatusItem.length = newLength
+        
+        for (index, id) in activeIDs.enumerated() {
+            guard let context = contexts[id] else { continue }
+            
+            let rect = NSRect(x: CGFloat(index * 26), y: 0, width: 26, height: button.bounds.height > 0 ? button.bounds.height : 22)
+            let iconView = IconView(frame: rect)
+            iconView.autoresizingMask = [.height]
+            
+            button.addSubview(iconView)
+            context.iconView = iconView
+            
+            refreshStatusItem(for: context)
+        }
     }
     
     func refreshStatusItem(for context: IAContext) {
@@ -362,10 +375,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         case .working: color = .systemOrange
         case .waiting: color = .systemRed
         }
-        
-        context.statusItem?.button?.title = "" // Clear any default title
-        context.statusItem?.button?.image = nil // Clear any default image
-        context.statusItem?.button?.toolTip = context.name
         
         if let iconView = context.iconView {
             iconView.letter = context.name
@@ -379,29 +388,67 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    func logDebug(_ message: String) {
+        // ... (keep this intact for future debugging, or remove if not needed. Let's keep it simple)
+        let path = "/tmp/iacompanion.log"
+        let text = "\(Date()): \(message)\n"
+        if let data = text.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: path) {
+                if let fileHandle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path)) {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                try? data.write(to: URL(fileURLWithPath: path))
+            }
+        }
+    }
+
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
-        guard let id = sender.identifier?.rawValue else { return }
-        let context = contexts[id]
+        guard let event = NSApp.currentEvent else { return }
         
-        // If there's a menu, let it handle the click natively
-        if context?.statusItem?.menu != nil { return }
+        // Find which icon was clicked based on X coordinate
+        let location = sender.convert(event.locationInWindow, from: nil)
+        let index = Int(location.x / 26.0)
+        
+        guard index >= 0 && index < activeIDs.count else { return }
+        let id = activeIDs[index]
         
         if id.lowercased() == "claude" {
-            bringAppToFront(names: ["Claude", "iTerm", "Terminal", "Ghostty", "Visual Studio Code"])
+            bringAppToFront(names: ["Claude", "iTerm", "Terminal", "iTerm2", "Ghostty", "Visual Studio Code", "Code"])
         } else {
-            bringAppToFront(names: ["iTerm", "Terminal", "Ghostty", "Visual Studio Code"])
+            bringAppToFront(names: ["iTerm", "Terminal", "iTerm2", "Ghostty", "Visual Studio Code", "Code"])
         }
     }
     
     func bringAppToFront(names: [String]) {
+        logDebug("bringAppToFront: Looking for \(names)")
         let workspace = NSWorkspace.shared
         let runningApps = workspace.runningApplications
+        
+        // Debug: log all running apps
+        for app in runningApps {
+            if let name = app.localizedName {
+                if names.contains(name) {
+                    logDebug("bringAppToFront: Found match = \(name) (Bundle: \(app.bundleIdentifier ?? ""))")
+                }
+            }
+        }
+        
         for name in names {
             if let app = runningApps.first(where: { $0.localizedName == name }) {
+                logDebug("bringAppToFront: Activating \(name)")
                 app.activate(options: .activateIgnoringOtherApps)
+                
+                // If the app is Terminal/iTerm, it might need to be unhidden
+                if app.isHidden {
+                    app.unhide()
+                }
                 return
             }
         }
+        logDebug("bringAppToFront: No matching app found.")
     }
 }
 
