@@ -2,6 +2,8 @@
 
 ![Hero Banner](docs/hero_banner.jpg)
 
+![Real Menubar in Action](docs/real_menubar.png)
+
 A minimalist, premium macOS menu bar app that tracks your AI coding assistants (Claude, Antigravity, Codex). It features gorgeous native iOS-style icons, real-time status indicators (working/waiting), and lets you seamlessly answer interactive AI prompts directly from the menu bar without switching windows.
 
 ---
