@@ -92,10 +92,10 @@ while True:
     cli_status = "working" if is_claude_cli_working() else "idle"
     
     # Combined Claude status
-    if cli_status == "working" or desktop_status == "working":
-        final_claude = "working"
-    elif desktop_status == "waiting":
+    if desktop_status == "waiting":
         final_claude = "waiting"
+    elif cli_status == "working" or desktop_status == "working":
+        final_claude = "working"
     else:
         final_claude = "idle"
         
