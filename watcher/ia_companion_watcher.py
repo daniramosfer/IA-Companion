@@ -27,14 +27,14 @@ def is_claude_cli_working():
     try:
         output = subprocess.check_output(["ps", "-A", "-o", "%cpu,command"], text=True)
         for line in output.split('\n'):
-            # Look for node running claude code (avoiding Claude Helper from Desktop app)
-            if 'node' in line.lower() and 'claude' in line.lower() and 'helper' not in line.lower():
+            # Look for node running claude code or the packaged claude-code binary
+            if ('node' in line.lower() and 'claude' in line.lower()) or ('/claude-code/' in line.lower()):
                 parts = line.strip().split(maxsplit=1)
                 if len(parts) >= 2:
                     try:
                         cpu = float(parts[0])
-                        # If CPU is above 1%, the LLM CLI is actively processing/streaming
-                        if cpu > 1.0:
+                        # If CPU is above 0.3%, the LLM CLI is actively processing/streaming
+                        if cpu >= 0.3:
                             return True
                     except:
                         pass
