@@ -325,6 +325,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func getContext(id: String, name: String) -> IAContext {
+        if id != "main" {
+            removeIA(id: "main")
+        }
+        
         if let existing = contexts[id] {
             return existing
         }
@@ -336,6 +340,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Create Full Icon View
         if let button = statusItem.button {
+            button.identifier = NSUserInterfaceItemIdentifier(id)
+            button.target = self
+            button.action = #selector(statusItemClicked(_:))
+            
             let iconView = IconView(frame: button.bounds)
             iconView.autoresizingMask = [.width, .height]
             button.addSubview(iconView)
@@ -367,6 +375,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 iconView.startPulsing()
             } else {
                 iconView.stopPulsing()
+            }
+        }
+    }
+    
+    @objc func statusItemClicked(_ sender: NSStatusBarButton) {
+        guard let id = sender.identifier?.rawValue else { return }
+        let context = contexts[id]
+        
+        // If there's a menu, let it handle the click natively
+        if context?.statusItem?.menu != nil { return }
+        
+        if id.lowercased() == "claude" {
+            bringAppToFront(names: ["Claude", "iTerm", "Terminal", "Ghostty", "Visual Studio Code"])
+        } else {
+            bringAppToFront(names: ["iTerm", "Terminal", "Ghostty", "Visual Studio Code"])
+        }
+    }
+    
+    func bringAppToFront(names: [String]) {
+        let workspace = NSWorkspace.shared
+        let runningApps = workspace.runningApplications
+        for name in names {
+            if let app = runningApps.first(where: { $0.localizedName == name }) {
+                app.activate(options: .activateIgnoringOtherApps)
+                return
             }
         }
     }
