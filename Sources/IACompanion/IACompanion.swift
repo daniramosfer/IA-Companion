@@ -201,6 +201,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupServer()
         
+        // Create a default icon so the user knows the app is running
+        _ = getContext(id: "main", name: "IA")
+        
         do {
             try server.start(50152, forceIPv4: true)
             print("Server has started on port 50152")
