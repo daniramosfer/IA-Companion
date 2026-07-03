@@ -61,11 +61,16 @@ curl -X POST http://localhost:50152/ask \
   }'
 ```
 
-## 🛠 Integrating with Claude Desktop
+## 🛠 Universal Automatic Watcher
 
-If you use the official Claude Desktop app, you can use the included `claude-watcher.sh` script to automatically sync its status to IA Companion by parsing its logs.
+To make IA Companion "just work" without having to manually start scripts or send `curl` commands, we've included a native macOS background daemon (`launchd`). 
+
+It runs invisibly in the background on startup, constantly monitoring CPU usage and log files to detect when **Claude Desktop**, **Claude Code**, or **Antigravity** are thinking.
+
+To install it so you never have to worry about it again, just run:
 ```bash
-./claude-watcher.sh &
+cd watcher
+./install.sh
 ```
 
 ---
