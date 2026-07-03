@@ -64,8 +64,8 @@ while True:
     ag_mtime = get_latest_antigravity_mtime()
     current_time = time.time()
     
-    # If transcript was modified in the last 4 seconds, it's working
-    new_ag_status = "working" if (current_time - ag_mtime) < 4 else "idle"
+    # If transcript was modified in the last 20 seconds, it's working
+    new_ag_status = "working" if (current_time - ag_mtime) < 20 else "idle"
     if new_ag_status != antigravity_status:
         antigravity_status = new_ag_status
         notify_status("antigravity", "Antigravity", antigravity_status)
